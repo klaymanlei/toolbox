@@ -1,9 +1,6 @@
 package com.klaymanlei.java.toolbox;
 
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 
 public class SentenceAnalyzer {
     /*
@@ -62,23 +59,28 @@ public class SentenceAnalyzer {
         }
     }
 
-    public static List<Word> cal(List<String> wordList) {
-        for (1
-                10.39.3.)
-        return null;
+    // 把一句话按照每2个字、3个字、4个字、5个字、6个字拆成小文字段，并返回所有出现过的文字段
+    public static Set<String> toElements(List<String> wordList) {
+        Set<String> resultSet = new HashSet<String>();
+        StringBuffer buf = new StringBuffer();
+        for (int i = 2; i < 8; i++) {
+            for (int j = 0; j < wordList.size() + 1 - i; j++) {
+                buf.setLength(0);
+                for (int k = 0; k < i; k++) {
+                    buf.append(wordList.get(j+k));
+                }
+                resultSet.add(buf.toString());
+            }
+        }
+        return resultSet;
     }
 
     public static void main(String[] args) {
-        System.out.println(pretreat("《中国新闻》2013年世界游泳锦标赛 孙杨卫冕800米自由泳金牌Cut"));
-    }
-
-    private static class Word {
-        final int position;
-        final String word;
-        Map<String, Integer> properties = new HashMap<String, Integer>();
-        Word(String word, int pos) {
-            this.word = word;
-            this.position = pos;
+        List<String> chars = pretreat("《中国新闻》2013年世界游泳锦标赛 孙杨卫冕800米自由泳金牌");
+        Set<String> words = toElements(chars);
+        System.out.println(words.size());
+        for (String w: words) {
+            System.out.println(w);
         }
     }
 }
