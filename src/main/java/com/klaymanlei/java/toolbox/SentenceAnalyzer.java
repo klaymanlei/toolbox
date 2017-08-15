@@ -29,11 +29,7 @@ public class SentenceAnalyzer {
      */
     public void resultCleaning(Map<String, Long> resultMap) {
         Set<String> delWord = new HashSet<String>();
-        int no = 1;
         for (String word : resultMap.keySet()) {
-            if (no % 100 == 0)
-                System.out.println(no + "/" + resultMap.size());
-            no++;
             for (String otherWord : resultMap.keySet()) {
                 if (otherWord.contains(word) && !otherWord.equals(word)) {
                     long wordVV = resultMap.get(word);
@@ -43,7 +39,6 @@ public class SentenceAnalyzer {
                 }
             }
         }
-        System.out.println(delWord.size() + ": 删除文字段");
         for (String word : delWord) {
             resultMap.remove(word);
         }
@@ -52,22 +47,26 @@ public class SentenceAnalyzer {
     public TreeMap<Long, Set<String>> analyze(String path) throws IOException {
         // 读取title的VV数据
         Map<String, Long> data = FileOper.readData(path);
+        Map<String, Long> resultMap = analyze(data);
+        TreeMap<Long, Set<String>> tmap = top(resultMap);
+        resultMap = distinct(tmap);
+        tmap = top(resultMap);
+        return tmap;
+    }
 
+    public Map<String, Long> analyze(Map<String, Long> data) {
         // 计算文字段的VV
         Map<String, Long> resultMap = new HashMap<String, Long>();
-        int no = 1;
         for (String title : data.keySet()) {
-            if (no % 10000 == 0)
-                System.out.println(no + "/" + data.size());
-            no++;
             long vv = data.get(title);
             List<List<String>> chars = SentenceOper.pretreat(title);
             Set<String> resultSet = new HashSet<String>();
+            // title拆成单词
             for (List<String> list : chars) {
-                //System.out.println(list);
                 Set<String> words = toElements(list);
                 resultSet.addAll(words);
             }
+            // 按单词统计VV
             for (String word : resultSet) {
                 Long value = resultMap.remove(word);
                 if (value == null)
@@ -75,9 +74,11 @@ public class SentenceAnalyzer {
                 resultMap.put(word, value + vv);
             }
         }
+        return resultMap;
+    }
 
+    public TreeMap<Long, Set<String>> top(Map<String, Long> resultMap) {
         // 结果按VV排序，取前1000名
-        System.out.println(resultMap.size());
         TreeMap<Long, Set<String>> tmap = new TreeMap<Long, Set<String>>();
         for (String word : resultMap.keySet()) {
             Long vv = resultMap.get(word);
@@ -85,30 +86,7 @@ public class SentenceAnalyzer {
             if (set == null) {
                 set = new HashSet<String>();
                 tmap.put(vv, set);
-                if (tmap.size() > 5000)
-                    tmap.remove(tmap.firstKey());
-            }
-            set.add(word);
-        }
-
-        // 清理包含在其他文字段中的段
-        resultMap.clear();
-        for (Long vv : tmap.keySet()) {
-            for (String word : tmap.get(vv)) {
-                resultMap.put(word, vv);
-            }
-        }
-        resultCleaning(resultMap);
-
-        // 结果按VV排序，取前1000名
-        tmap.clear();
-        for (String word : resultMap.keySet()) {
-            Long vv = resultMap.get(word);
-            Set<String> set = tmap.get(vv);
-            if (set == null) {
-                set = new HashSet<String>();
-                tmap.put(vv, set);
-                if (tmap.size() > 5000)
+                if (tmap.size() > 1000)
                     tmap.remove(tmap.firstKey());
             }
             set.add(word);
@@ -116,12 +94,182 @@ public class SentenceAnalyzer {
         return tmap;
     }
 
+    public Map<String, Long> distinct(TreeMap<Long, Set<String>> tmap) {
+        // 清理包含在其他文字段中的段
+        Map<String, Long> resultMap = new HashMap<String, Long>();
+        for (Long vv : tmap.keySet()) {
+            for (String word : tmap.get(vv)) {
+                resultMap.put(word, vv);
+            }
+        }
+        resultCleaning(resultMap);
+        return resultMap;
+    }
+
+    // 尝试合并VV相同的多个文字段，如果一个文字段去掉第一个字和另一个文字段去掉最后一个字之后完全相同，则合并两个文字段
+    public void merge(TreeMap<Long, Set<String>> wordMap) {
+        for (Long key : wordMap.keySet()) {
+            List<String> words = new ArrayList<String>();
+            Set<String> set = wordMap.get(key);
+            words.addAll(set);
+            if (words.size() == 1)
+                continue;
+            merge(words);
+            set.clear();
+            set.addAll(words);
+//            System.out.println(words);
+//            System.out.println(wordMap.get(key));
+        }
+    }
+
+    // 检查集合中的文字段之间是否可以合并
+    public void merge(List<String> list) {
+        int cantMergeCnt = 0;
+        while (list.size() > 1 && list.size() > cantMergeCnt) {
+            String word = list.remove(0);
+            String mergedWord = merge(list, word);
+            list.add(mergedWord);
+            cantMergeCnt += 1;
+        }
+    }
+
+    // 检查keyword是否和集合中的文字段可以合并
+    public String merge(List<String> words, String keyword) {
+        String mergedWord = keyword;
+        for (int i = 0; i < words.size();) {
+            if (mergedWord.equals(words.get(i))) {
+                words.remove(i);
+                continue;
+            }
+            String merged = merge(mergedWord, words.get(i));
+            if (mergedWord.equals(merged)) {
+                i++;
+            }else {
+                // 两个文字段合并成一个新的文字段后，重新与集合中所有文字段进行对比
+                mergedWord = merged;
+                words.remove(i);
+                i = 0;
+            }
+        }
+        return mergedWord;
+    }
+
+    // 检查两个文字段，如果只有第一个字或最后一个字不同，则合并两段文字
+    public String merge(String merged, String word) {
+        String longer = merged.length() > word.length() ? merged : word;
+        String shorter = merged.length() > word.length() ? word : merged;
+        if (longer.substring(1).contains(shorter.substring(0, shorter.length() - 1))) {
+            return longer + shorter.charAt(shorter.length() - 1);
+        }
+        if (longer.substring(0, longer.length() - 1).contains(shorter.substring(1))) {
+            return shorter.charAt(0) + longer;
+        }
+        return merged;
+    }
+
+    // 用VV较高的文字段对VV较低的文字段进行重新分词
+    public TreeMap<Long, Set<String>> splitWord(TreeMap<Long, Set<String>> tmap) {
+        TreeMap<Long, Set<String>> resultMap = new TreeMap<Long, Set<String>>();
+        Node node = new Node();
+        while (tmap.size() > 0) {
+            Long vv = tmap.lastKey();
+            Set<String> words = tmap.remove(vv);
+            Set<String> splited = new HashSet<String>();
+            for (String word : words) {
+                Set<String> set = null;
+                if (word.length() > 7) {
+                    set = splitWord(node, word);
+                    splited.addAll(set);
+                    if (set.size() != 1 || !set.contains(word)) {
+                        continue;
+                    }
+                } else {
+                    set = new HashSet<String>();
+                    set.add(word);
+                    splited.add(word);
+                }
+                node.add(set);
+            }
+            if (splited.size() > 0)
+                resultMap.put(vv, splited);
+        }
+        return resultMap;
+    }
+
+    // 用保存的词库对word进行分词
+    public Set<String> splitWord(Node node, String word) {
+        Set<String> set = new HashSet<String>();
+        int len = word.length();
+        for (int i = len - 2; i >= 0; i--) {
+            String sub = word.substring(i);
+            int j = i;
+            Node pointer = node;
+            for (; j < word.length(); j++) {
+                if (pointer.map.containsKey(String.valueOf(word.charAt(j)))) {
+                    pointer = pointer.map.get(String.valueOf(word.charAt(j)));
+                } else {
+                    break;
+                }
+            }
+            if (!pointer.map.containsKey("")) {
+                j = i;
+            }
+            if (j > i) {
+                if (j < word.length() - 1)
+                    set.add(word.substring(j));
+                word = word.substring(0, i);
+            }
+        }
+        if(word.length() > 1)
+            set.add(word);
+        return set;
+    }
+
     public static void main(String[] args) throws IOException {
-        String path = "/home/leidayu/dev/sina/zmodem/videotitle_sub.out";
-        TreeMap<Long, Set<String>> tmap = new SentenceAnalyzer().analyze(path);
-        // 打印
-        while(tmap.size() > 0) {
-            System.out.println(tmap.lastKey() + ": " + tmap.remove(tmap.lastKey()));
+        Map<String, Long> rs = new HashMap<String, Long>();
+        for (int i = 4; i < 11; i++) {
+            String day = i < 10 ? "0" + i : "" + i;
+            String path = "D:/zmodem/videotitle.2017-08-" + day + ".out";
+            System.out.println(path);
+            SentenceAnalyzer analyzer = new SentenceAnalyzer();
+            TreeMap<Long, Set<String>> tmap = analyzer.analyze(path);
+            analyzer.merge(tmap);
+            TreeMap<Long, Set<String>> interRs = analyzer.splitWord(tmap);
+            // 打印
+            int n = rs.size();
+            while (rs.size() > 0) {
+                if (n - rs.size() > 500)
+                    break;
+                Long vv = interRs.lastKey();
+                Set<String> words = interRs.remove(vv);
+                for (String w : words) {
+                    Long vvRs = rs.remove(w);
+                    if (vvRs == null)
+                        vvRs = 0l;
+                    vvRs += vv;
+                    rs.put(w, vvRs);
+                }
+            }
+        }
+        System.out.println(rs.lastKey() + ": " + rs.remove(rs.lastKey()));
+    }
+
+    private static class Node {
+        Map<String, Node> map = new HashMap<String, Node>();
+        void add(Set<String> set) {
+            for (String word : set) {
+                Map<String, Node> pointer = map;
+                List<String> list = SentenceOper.split(word);
+                for (String c : list) {
+                    Node node = pointer.get(c);
+                    if (node == null) {
+                        node = new Node();
+                        pointer.put(c, node);
+                    }
+                    pointer = node.map;
+                }
+                pointer.put("", null);
+            }
         }
     }
 }
