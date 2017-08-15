@@ -10,6 +10,10 @@ import java.util.Map;
 
 public class FileOper {
 
+    public static void writeData(List<String> lines, String path) throws IOException {
+        FileUtils.writeLines(new File(path), lines);
+    }
+
     public static Map<String, Long> readData(String path) throws IOException {
         List<String> lines = FileUtils.readLines(new File(path));
         Map<String, Long> resultMap = new HashMap<String, Long>();
