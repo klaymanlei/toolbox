@@ -1,9 +1,13 @@
 package com.klaymanlei.java.toolbox;
 
+import org.apache.commons.io.FileUtils;
+
 import java.io.IOException;
 import java.util.*;
 
 public class SentenceAnalyzer {
+
+    public static final int MAX_WORD_LEN = 5;
 
     // 把一句话按照每2个字、3个字、4个字、5个字、6个字拆成小文字段，并返回所有出现过的文字段
     public Set<String> toElements(List<String> wordList) {
@@ -11,7 +15,7 @@ public class SentenceAnalyzer {
         if (wordList == null)
             return resultSet;
         StringBuffer buf = new StringBuffer();
-        for (int i = 2; i < 8; i++) {
+        for (int i = 2; i < MAX_WORD_LEN + 1; i++) {
             for (int j = 0; j < wordList.size() + 1 - i; j++) {
                 buf.setLength(0);
                 for (int k = 0; k < i; k++) {
@@ -44,13 +48,32 @@ public class SentenceAnalyzer {
         }
     }
 
+    public TreeMap<Long, Set<String>> analyze(String path, int n) throws IOException {
+        TreeMap<Long, Set<String>> tmap = analyze(path);
+        merge(tmap);
+        TreeMap<Long, Set<String>> interRs = splitWord(tmap);
+        Map<String, Long> rs = new HashMap<String, Long>();
+        while (interRs.size() > 0) {
+            Long vv = interRs.lastKey();
+            Set<String> words = interRs.remove(vv);
+            for (String w : words) {
+                Long vvRs = rs.remove(w);
+                if (vvRs == null)
+                    vvRs = 0l;
+                vvRs += vv;
+                rs.put(w, vvRs);
+            }
+        }
+        return top(rs, n);
+    }
+
     public TreeMap<Long, Set<String>> analyze(String path) throws IOException {
         // 读取title的VV数据
         Map<String, Long> data = FileOper.readData(path);
         Map<String, Long> resultMap = analyze(data);
-        TreeMap<Long, Set<String>> tmap = top(resultMap);
+        TreeMap<Long, Set<String>> tmap = top(resultMap, 5000);
         resultMap = distinct(tmap);
-        tmap = top(resultMap);
+        tmap = top(resultMap, 5000);
         return tmap;
     }
 
@@ -77,7 +100,7 @@ public class SentenceAnalyzer {
         return resultMap;
     }
 
-    public TreeMap<Long, Set<String>> top(Map<String, Long> resultMap) {
+    public TreeMap<Long, Set<String>> top(Map<String, Long> resultMap, int n) {
         // 结果按VV排序，取前1000名
         TreeMap<Long, Set<String>> tmap = new TreeMap<Long, Set<String>>();
         for (String word : resultMap.keySet()) {
@@ -86,7 +109,7 @@ public class SentenceAnalyzer {
             if (set == null) {
                 set = new HashSet<String>();
                 tmap.put(vv, set);
-                if (tmap.size() > 1000)
+                if (tmap.size() > n)
                     tmap.remove(tmap.firstKey());
             }
             set.add(word);
@@ -177,7 +200,7 @@ public class SentenceAnalyzer {
             Set<String> splited = new HashSet<String>();
             for (String word : words) {
                 Set<String> set = null;
-                if (word.length() > 7) {
+                if (word.length() > MAX_WORD_LEN) {
                     set = splitWord(node, word);
                     splited.addAll(set);
                     if (set.size() != 1 || !set.contains(word)) {
@@ -226,32 +249,20 @@ public class SentenceAnalyzer {
     }
 
     public static void main(String[] args) throws IOException {
-        Map<String, Long> rs = new HashMap<String, Long>();
-        for (int i = 4; i < 11; i++) {
-            String day = i < 10 ? "0" + i : "" + i;
-            String path = "D:/zmodem/videotitle.2017-08-" + day + ".out";
+        String[] strs = {"07-28", "07-29", "07-30", "07-31", "08-01", "08-02", "08-03", "08-04", "08-05", "08-06", "08-07", "08-08", "08-09", "08-10"};
+        for (String s : strs) {
+            String path = "/home/leidayu/dev/sina/zmodem/videotitle.2017-" + s + ".out";
             System.out.println(path);
             SentenceAnalyzer analyzer = new SentenceAnalyzer();
-            TreeMap<Long, Set<String>> tmap = analyzer.analyze(path);
-            analyzer.merge(tmap);
-            TreeMap<Long, Set<String>> interRs = analyzer.splitWord(tmap);
-            // 打印
-            int n = rs.size();
-            while (rs.size() > 0) {
-                if (n - rs.size() > 500)
-                    break;
-                Long vv = interRs.lastKey();
-                Set<String> words = interRs.remove(vv);
-                for (String w : words) {
-                    Long vvRs = rs.remove(w);
-                    if (vvRs == null)
-                        vvRs = 0l;
-                    vvRs += vv;
-                    rs.put(w, vvRs);
+            TreeMap<Long, Set<String>> tmap = analyzer.analyze(path, 500);
+            List<String> lines = new ArrayList<String>();
+            for (Long vv : tmap.keySet()) {
+                for (String word : tmap.get(vv)) {
+                    lines.add(word + "\t" + vv);
                 }
             }
+            FileOper.writeData(lines, "/home/leidayu/dev/sina/zmodem/videotitle.2017-" + s + ".rs");
         }
-        System.out.println(rs.lastKey() + ": " + rs.remove(rs.lastKey()));
     }
 
     private static class Node {
