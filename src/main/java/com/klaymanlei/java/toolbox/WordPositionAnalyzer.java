@@ -30,7 +30,7 @@ public class WordPositionAnalyzer {
     public static void main(String[] args) throws IOException {
         // 读取title的VV数据
         String path = "/home/leidayu/dev/sina/zmodem/videotitle_vv_top.out";
-        Map<String, Long> data = FileOper.readData(path);
+        Map<String, Long> data = SentenceAnalyzer.readData(path);
 
 //        Map<String, Long> data = new HashMap<String, Long>();
 //        data.put("C-Oli Chanel", 6509l);
