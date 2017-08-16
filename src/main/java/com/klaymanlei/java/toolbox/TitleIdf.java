@@ -85,7 +85,7 @@ public class TitleIdf {
         }
     }
 
-    private static class Word {
+    static class Word {
         private String word;
         // Double[] = {vv, tf}
         private Map<String, Double[]> dateMap = new HashMap<String, Double[]>();
